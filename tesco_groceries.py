@@ -19,12 +19,6 @@ load_dotenv()
 GROCERIES = [
     "milk 2L",
     "wholemeal bread",
-    "bananas 1kg",
-    "cheddar cheese",
-    "eggs dozen",
-    "butter",
-    "chicken breast",
-    "tomatoes",
 ]
 
 
