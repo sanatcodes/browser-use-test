@@ -19,8 +19,35 @@ from fastapi.responses import JSONResponse
 
 from tesco_groceries import run_groceries
 
+# region agent log - startup env check
+def _log_debug(location, message, data, hypothesis_id):
+    try:
+        with open('/Users/sthukral/Documents/GitHub/browser-use-test/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": hypothesis_id, "location": location, "message": message, "data": data, "timestamp": int(time.time() * 1000)}) + '\n')
+    except: pass
+# endregion
+
+# region agent log - before load_dotenv
+_log_debug("slack_server.py:23", "Environment before load_dotenv", {
+    "all_env_keys": list(os.environ.keys()),
+    "has_SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN" in os.environ,
+    "has_SLACK_SIGNING_SECRET": "SLACK_SIGNING_SECRET" in os.environ,
+    "SLACK_BOT_TOKEN_value": os.environ.get("SLACK_BOT_TOKEN", "NOT_SET")[:20] + "..." if os.environ.get("SLACK_BOT_TOKEN") else "NOT_SET",
+    "similar_keys": [k for k in os.environ.keys() if 'SLACK' in k.upper() or 'BOT' in k.upper() or 'TOKEN' in k.upper()]
+}, "A,B,D")
+# endregion
+
 # Load environment variables
 load_dotenv()
+
+# region agent log - after load_dotenv
+_log_debug("slack_server.py:24", "Environment after load_dotenv", {
+    "has_SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN" in os.environ,
+    "has_SLACK_SIGNING_SECRET": "SLACK_SIGNING_SECRET" in os.environ,
+    "SLACK_BOT_TOKEN_value": os.environ.get("SLACK_BOT_TOKEN", "NOT_SET")[:20] + "..." if os.environ.get("SLACK_BOT_TOKEN") else "NOT_SET",
+    "dotenv_file_exists": os.path.exists(".env")
+}, "D")
+# endregion
 
 # Initialize FastAPI app
 app = FastAPI(title="Tesco Bot")
@@ -31,6 +58,16 @@ processed_events = set()
 # Slack configuration
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+
+# region agent log - after getenv
+_log_debug("slack_server.py:32", "After os.getenv calls", {
+    "SLACK_SIGNING_SECRET": "SET" if SLACK_SIGNING_SECRET else "NONE",
+    "SLACK_SIGNING_SECRET_len": len(SLACK_SIGNING_SECRET) if SLACK_SIGNING_SECRET else 0,
+    "SLACK_BOT_TOKEN": "SET" if SLACK_BOT_TOKEN else "NONE",
+    "SLACK_BOT_TOKEN_len": len(SLACK_BOT_TOKEN) if SLACK_BOT_TOKEN else 0,
+    "SLACK_BOT_TOKEN_first_chars": SLACK_BOT_TOKEN[:10] if SLACK_BOT_TOKEN else "NONE"
+}, "A,B,E")
+# endregion
 
 
 def verify_slack_signature(request_body: bytes, timestamp: str, signature: str) -> bool:
@@ -257,10 +294,33 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     
+    # region agent log - validation point
+    _log_debug("slack_server.py:260", "At validation point", {
+        "SLACK_SIGNING_SECRET_is_truthy": bool(SLACK_SIGNING_SECRET),
+        "SLACK_BOT_TOKEN_is_truthy": bool(SLACK_BOT_TOKEN),
+        "SLACK_SIGNING_SECRET_type": type(SLACK_SIGNING_SECRET).__name__,
+        "SLACK_BOT_TOKEN_type": type(SLACK_BOT_TOKEN).__name__,
+        "SLACK_SIGNING_SECRET_repr": repr(SLACK_SIGNING_SECRET)[:50],
+        "SLACK_BOT_TOKEN_repr": repr(SLACK_BOT_TOKEN)[:50]
+    }, "E")
+    # endregion
+    
     # Validate required environment variables
     if not SLACK_SIGNING_SECRET:
+        # region agent log - signing secret failed
+        _log_debug("slack_server.py:262", "SLACK_SIGNING_SECRET validation failed", {
+            "value": repr(SLACK_SIGNING_SECRET),
+            "all_env_vars": {k: v[:20] + "..." if len(v) > 20 else v for k, v in os.environ.items() if 'SLACK' in k or 'TOKEN' in k or 'SECRET' in k}
+        }, "A,B")
+        # endregion
         raise ValueError("SLACK_SIGNING_SECRET environment variable is required")
     if not SLACK_BOT_TOKEN:
+        # region agent log - bot token failed
+        _log_debug("slack_server.py:264", "SLACK_BOT_TOKEN validation failed", {
+            "value": repr(SLACK_BOT_TOKEN),
+            "all_env_vars": {k: v[:20] + "..." if len(v) > 20 else v for k, v in os.environ.items() if 'SLACK' in k or 'TOKEN' in k or 'SECRET' in k}
+        }, "A,B,C")
+        # endregion
         raise ValueError("SLACK_BOT_TOKEN environment variable is required")
     
     # Run server
