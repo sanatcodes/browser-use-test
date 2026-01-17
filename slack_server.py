@@ -204,9 +204,18 @@ async def run_grocery_automation_background(grocery_list: list[str], channel: st
              items=grocery_list[:5])
     
     try:
-        # Run the automation
+        # Run the automation with callback to capture live URL
         log_info("🌐 Launching browser automation")
-        result = await run_groceries(grocery_list, print_output=False)
+        
+        # Callback to capture and send live URL to Slack
+        async def send_live_url(live_url: str):
+            await post_to_slack(
+                channel,
+                f"👀 Watch the automation live:\n{live_url}",
+                thread_ts
+            )
+        
+        result = await run_groceries(grocery_list, print_output=False, live_url_callback=send_live_url)
         log_info("✅ Automation completed", result_length=len(result))
         
         # Format result for Slack

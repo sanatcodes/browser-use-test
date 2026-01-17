@@ -54,7 +54,7 @@ def create_task_prompt(grocery_items: list[str]) -> str:
     """Create the detailed task prompt for the agent."""
     formatted_list = format_grocery_list(grocery_items)
     
-    prompt = f"""GOAL: Log into Tesco.ie, add groceries to cart, and provide the cart URL.
+    prompt = f"""GOAL: Log into Tesco.ie, add groceries to cart using Whoosh delivery (rapid delivery), and provide the cart URL.
 
 IMPORTANT SECURITY NOTE:
 - You have access to TESCO_EMAIL and TESCO_PASSWORD via secret injection
@@ -72,7 +72,15 @@ EXECUTION STEPS:
    - Submit login form
    - Wait for successful login confirmation
 
-2. SEARCH AND ADD ITEMS:
+2. SELECT WHOOSH DELIVERY (RAPID DELIVERY):
+   - After logging in, look for delivery options or delivery method selector
+   - Select "Whoosh" delivery or "Rapid delivery" or "Quick delivery" option
+   - This is typically at the top of the page or in a delivery slot selector
+   - If you see a delivery slot picker, choose the earliest Whoosh/rapid delivery slot available
+   - Confirm the Whoosh delivery selection
+   - IMPORTANT: Ensure Whoosh/rapid delivery is selected before adding items
+
+3. SEARCH AND ADD ITEMS:
    For each item in the list below, perform these steps:
    - Use the search bar to search for the item
    - Wait for search results to load
@@ -88,15 +96,17 @@ EXECUTION STEPS:
 GROCERY LIST:
 {formatted_list}
 
-3. NAVIGATE TO CART:
+4. NAVIGATE TO CART:
    - After processing all items, click on the cart/trolley icon
    - Navigate to the cart/basket page
    - Wait for the cart page to fully load
+   - Verify that Whoosh delivery is still selected
 
-4. FINAL OUTPUT:
+5. FINAL OUTPUT:
    - Extract the current cart page URL
    - Provide output in this exact format:
      CART_URL: [the full URL of the cart page]
+   - Confirm if Whoosh delivery is selected
    - List any items that could not be added (not found or out of stock)
    - DO NOT proceed to checkout
    - DO NOT place the order
@@ -109,13 +119,14 @@ STOP CONDITIONS:
     return prompt
 
 
-async def run_groceries(grocery_list: list[str], print_output: bool = True) -> str:
+async def run_groceries(grocery_list: list[str], print_output: bool = True, live_url_callback=None) -> str:
     """
     Run the Tesco grocery automation with a dynamic grocery list.
     
     Args:
         grocery_list: List of grocery items to order
         print_output: Whether to print progress to console (default: True)
+        live_url_callback: Optional async callback function to send live URL to (e.g., Slack)
     
     Returns:
         str: Result message with cart URL and any missing items
@@ -236,6 +247,15 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
                 encoded_cdp = urllib.parse.quote(f"https://{cdp_part}", safe='')
                 live_url = f"https://live.browser-use.com?wss={encoded_cdp}"
                 log_info("📺 Live browser URL available", url=live_url)
+                
+                # Send to callback if provided (e.g., to Slack)
+                if live_url_callback:
+                    try:
+                        await live_url_callback(live_url)
+                        log_info("Live URL sent via callback")
+                    except Exception as e:
+                        log_error("Failed to send live URL via callback", error=str(e))
+                
                 if print_output:
                     print(f"\n👀 Watch the browser live at:")
                     print(f"   {live_url}\n")
