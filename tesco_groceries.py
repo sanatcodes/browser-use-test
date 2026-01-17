@@ -8,11 +8,34 @@ adds them to cart, and returns the cart URL.
 import asyncio
 import os
 import urllib.parse
+from datetime import datetime
 from dotenv import load_dotenv
 from browser_use import Agent, Browser, ChatBrowserUse
 
 # Load environment variables
 load_dotenv()
+
+
+def log_info(message: str, **kwargs):
+    """Log informational message with timestamp"""
+    timestamp = datetime.utcnow().isoformat()
+    if kwargs:
+        import json
+        data_str = json.dumps(kwargs)
+        print(f"[{timestamp}] TESCO_INFO: {message} {data_str}")
+    else:
+        print(f"[{timestamp}] TESCO_INFO: {message}")
+
+
+def log_error(message: str, **kwargs):
+    """Log error message with timestamp"""
+    timestamp = datetime.utcnow().isoformat()
+    if kwargs:
+        import json
+        data_str = json.dumps(kwargs)
+        print(f"[{timestamp}] TESCO_ERROR: {message} {data_str}")
+    else:
+        print(f"[{timestamp}] TESCO_ERROR: {message}")
 
 
 # Grocery list - edit this with items you want to order
@@ -97,13 +120,22 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
     Returns:
         str: Result message with cart URL and any missing items
     """
+    log_info("🚀 Starting run_groceries function", item_count=len(grocery_list))
+    
     # Validate required environment variables
     browser_use_api_key = os.getenv("BROWSER_USE_API_KEY")
     cloud_profile_id = os.getenv("BROWSER_USE_PROFILE_ID")  # Optional: your existing profile ID
     tesco_email = os.getenv("TESCO_EMAIL")
     tesco_password = os.getenv("TESCO_PASSWORD")
     
+    log_info("Checking environment variables",
+             has_api_key=bool(browser_use_api_key),
+             has_profile_id=bool(cloud_profile_id),
+             has_email=bool(tesco_email),
+             has_password=bool(tesco_password))
+    
     if not browser_use_api_key:
+        log_error("Missing BROWSER_USE_API_KEY")
         raise ValueError(
             "BROWSER_USE_API_KEY environment variable is required.\n"
             "Get your API key at: https://cloud.browser-use.com/settings?tab=api-keys\n"
@@ -111,6 +143,7 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
         )
     
     if not tesco_email or not tesco_password:
+        log_error("Missing Tesco credentials")
         raise ValueError(
             "TESCO_EMAIL and TESCO_PASSWORD environment variables are required.\n"
             "Set them with:\n"
@@ -126,6 +159,8 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
             print(f"👤 Using browser profile: {cloud_profile_id}")
         print("-" * 60)
     
+    log_info("Initializing browser", use_cloud=True, allowed_domains=['tesco.ie'])
+    
     # Initialize browser with cloud, domain restrictions, and profile
     browser_kwargs = {
         "use_cloud": True,
@@ -136,28 +171,46 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
     if cloud_profile_id:
         browser_kwargs["cloud_profile_id"] = cloud_profile_id
     
-    browser = Browser(**browser_kwargs)
+    try:
+        browser = Browser(**browser_kwargs)
+        log_info("✅ Browser initialized successfully")
+    except Exception as e:
+        log_error("Failed to initialize browser", error=str(e), error_type=type(e).__name__)
+        raise
     
     # Initialize LLM
-    llm = ChatBrowserUse()
+    log_info("Initializing LLM")
+    try:
+        llm = ChatBrowserUse()
+        log_info("✅ LLM initialized successfully")
+    except Exception as e:
+        log_error("Failed to initialize LLM", error=str(e), error_type=type(e).__name__)
+        raise
     
     # Create task prompt
     task_prompt = create_task_prompt(grocery_list)
+    log_info("Task prompt created", prompt_length=len(task_prompt))
     
     # Initialize agent with sensitive data
-    agent = Agent(
-        task=task_prompt,
-        llm=llm,
-        browser=browser,
-        use_vision=True,  # Enable vision to see page elements
-        use_thinking=False,
-        flash_mode=False,
-        highlight_elements=True,  # Highlight interactive elements
-        sensitive_data={
-            "TESCO_EMAIL": tesco_email,
-            "TESCO_PASSWORD": tesco_password,
-        }
-    )
+    log_info("Initializing agent")
+    try:
+        agent = Agent(
+            task=task_prompt,
+            llm=llm,
+            browser=browser,
+            use_vision=True,  # Enable vision to see page elements
+            use_thinking=False,
+            flash_mode=False,
+            highlight_elements=True,  # Highlight interactive elements
+            sensitive_data={
+                "TESCO_EMAIL": tesco_email,
+                "TESCO_PASSWORD": tesco_password,
+            }
+        )
+        log_info("✅ Agent initialized successfully")
+    except Exception as e:
+        log_error("Failed to initialize agent", error=str(e), error_type=type(e).__name__)
+        raise
     
     if print_output:
         print("🤖 Agent initialized, starting execution...")
@@ -166,11 +219,15 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
     
     # Variable to store live URL
     live_url_captured = False
+    step_count = 0
     
     # Callback to capture live URL on first step (after browser starts)
     async def on_step_start(agent_instance):
-        nonlocal live_url_captured
-        if not live_url_captured and agent_instance.browser_session and print_output:
+        nonlocal live_url_captured, step_count
+        step_count += 1
+        log_info(f"Step {step_count} starting")
+        
+        if not live_url_captured and agent_instance.browser_session:
             # Try to get live URL from browser session's CDP URL
             cdp_url = agent_instance.browser_session.cdp_url
             if cdp_url and 'wss://' in cdp_url:
@@ -178,18 +235,29 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
                 # URL encode the CDP URL part for the live URL
                 encoded_cdp = urllib.parse.quote(f"https://{cdp_part}", safe='')
                 live_url = f"https://live.browser-use.com?wss={encoded_cdp}"
-                print(f"\n👀 Watch the browser live at:")
-                print(f"   {live_url}\n")
+                log_info("📺 Live browser URL available", url=live_url)
+                if print_output:
+                    print(f"\n👀 Watch the browser live at:")
+                    print(f"   {live_url}\n")
                 live_url_captured = True
     
     # Run agent with callback to capture live URL
-    history = await agent.run(
-        max_steps=150,  # Allow enough steps for login + multiple searches
-        on_step_start=on_step_start,
-    )
+    log_info("🏃 Starting agent execution", max_steps=150)
+    try:
+        history = await agent.run(
+            max_steps=150,  # Allow enough steps for login + multiple searches
+            on_step_start=on_step_start,
+        )
+        log_info("✅ Agent execution completed", total_steps=step_count)
+    except Exception as e:
+        log_error("Agent execution failed", error=str(e), error_type=type(e).__name__)
+        import traceback
+        log_error("Stack trace", trace=traceback.format_exc())
+        raise
     
     # Get final result
     result = history.final_result()
+    log_info("Final result obtained", result_length=len(result))
     
     if print_output:
         print("\n" + "=" * 60)
@@ -208,6 +276,7 @@ async def run_groceries(grocery_list: list[str], print_output: bool = True) -> s
                     print(f"\n🛒 Your cart is ready at:")
                     print(f"   {cart_url}")
                     print("\n💡 Open this URL to review and complete your order.")
+                    log_info("Cart URL extracted", cart_url=cart_url)
                     break
     
     return result
