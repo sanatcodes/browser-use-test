@@ -85,8 +85,16 @@ def verify_slack_signature(request_body: bytes, timestamp: str, signature: str) 
     if not SLACK_SIGNING_SECRET:
         return False
     
+    # Handle missing or empty headers
+    if not timestamp or not signature:
+        return False
+    
     # Check timestamp to prevent replay attacks
-    if abs(time.time() - int(timestamp)) > 60 * 5:
+    try:
+        timestamp_int = int(timestamp)
+        if abs(time.time() - timestamp_int) > 60 * 5:
+            return False
+    except (ValueError, TypeError):
         return False
     
     # Create signature base string
