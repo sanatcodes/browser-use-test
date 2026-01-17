@@ -54,7 +54,7 @@ def create_task_prompt(grocery_items: list[str]) -> str:
     """Create the detailed task prompt for the agent."""
     formatted_list = format_grocery_list(grocery_items)
     
-    prompt = f"""GOAL: Log into Tesco.ie, add groceries to cart using Whoosh delivery (rapid delivery), and provide the cart URL.
+    prompt = f"""GOAL: Log into Tesco.ie, add groceries to cart, proceed to checkout, select Whoosh delivery, and provide the checkout URL.
 
 IMPORTANT SECURITY NOTE:
 - You have access to TESCO_EMAIL and TESCO_PASSWORD via secret injection
@@ -72,49 +72,70 @@ EXECUTION STEPS:
    - Submit login form
    - Wait for successful login confirmation
 
-2. SELECT WHOOSH DELIVERY (RAPID DELIVERY):
-   - After logging in, look for delivery options or delivery method selector
-   - Select "Whoosh" delivery or "Rapid delivery" or "Quick delivery" option
-   - This is typically at the top of the page or in a delivery slot selector
-   - If you see a delivery slot picker, choose the earliest Whoosh/rapid delivery slot available
-   - Confirm the Whoosh delivery selection
-   - IMPORTANT: Ensure Whoosh/rapid delivery is selected before adding items
-
-3. SEARCH AND ADD ITEMS:
+2. SEARCH AND ADD ITEMS TO CART (CRITICAL STEP):
+   ⚠️ THIS IS THE MOST IMPORTANT STEP - YOU MUST ADD ALL ITEMS TO THE CART ⚠️
+   
    For each item in the list below, perform these steps:
    - Use the search bar to search for the item
    - Wait for search results to load
    - If the item is found:
      * Click on the best matching product (typically the first result)
      * Click "Add to trolley" or "Add to basket" button
-     * Wait for confirmation that item was added
+     * Wait for confirmation that item was added (look for "Added to basket" message or cart count update)
+     * Verify the item appears in the cart icon (the number should increase)
      * If quantity needs adjustment, set it to 1 (unless specified in item name)
    - If the item is NOT found or out of stock:
      * Note it in your memory and continue to the next item
-   - Return to search for the next item
+   - After each item, return to search or homepage to search for the next item
+   - DO NOT skip items - attempt to add every item in the list
 
 GROCERY LIST:
 {formatted_list}
 
-4. NAVIGATE TO CART:
-   - After processing all items, click on the cart/trolley icon
+3. VERIFY CART AND NAVIGATE TO CART PAGE:
+   - After attempting to add ALL items, verify the cart icon shows items (should have a number)
+   - Click on the cart/trolley icon
    - Navigate to the cart/basket page
    - Wait for the cart page to fully load
-   - Verify that Whoosh delivery is still selected
+   - Verify that items are visible in the cart
+   - Review the list of items in cart to ensure they were added
+   - If cart is empty, DO NOT proceed - go back and add items
 
-5. FINAL OUTPUT:
-   - Extract the current cart page URL
+4. PROCEED TO CHECKOUT:
+   - Only proceed if you have confirmed items are in the cart
+   - Click "Proceed to checkout" or "Checkout" or "Go to checkout" button
+   - Wait for checkout page to load
+
+5. SELECT WHOOSH DELIVERY (RAPID DELIVERY):
+   - On the checkout page, look for delivery method options
+   - Look for "Whoosh", "Rapid delivery", "Quick delivery", or similar fast delivery options
+   - Select Whoosh/rapid delivery method
+   - If prompted to choose a delivery slot/time, select the earliest available Whoosh slot
+   - Confirm the Whoosh delivery selection
+   - Wait for the delivery method to be confirmed
+   - IMPORTANT: Do not proceed to payment yet
+
+6. FINAL OUTPUT:
+   - Extract the current checkout page URL (after Whoosh delivery is selected)
    - Provide output in this exact format:
-     CART_URL: [the full URL of the cart page]
-   - Confirm if Whoosh delivery is selected
+     CART_URL: [the full URL of the checkout page]
+     DELIVERY_METHOD: Whoosh
+     ITEMS_IN_CART: [number of items successfully added]
    - List any items that could not be added (not found or out of stock)
-   - DO NOT proceed to checkout
+   - DO NOT proceed to payment
+   - DO NOT enter payment details
    - DO NOT place the order
 
 STOP CONDITIONS:
-- Stop at the cart page after all items are processed
-- Do not proceed beyond viewing the cart
-- Do not enter payment or delivery details
+- Stop at the checkout page after Whoosh delivery is selected
+- Do not proceed to payment step
+- Do not enter card details or complete the purchase
+
+CRITICAL REMINDERS:
+- Adding items to cart is the PRIMARY goal - do not skip this step
+- Verify each item is added before moving to the next one
+- Check cart icon shows correct item count
+- Only proceed to checkout if items are in cart
 """
     return prompt
 
